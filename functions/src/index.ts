@@ -23,7 +23,6 @@ const db = admin.firestore();
 const userCollection = 'users';
 const credentialsCollection = 'credentials';
 const matchesDataCollection = 'matchesData';
-const versionCollection = 'version';
 const itemCollection = db.collection('items');
 const monsterCollection = 'monsterData'
 
@@ -2393,7 +2392,7 @@ app.post('/api/addItems', async (req, res) => {
     const batch = db.batch();
 
     items.forEach((item: { itemId: string; }) => {
-      const itemRef = db.collection('items').doc(item.itemId);
+      const itemRef = db.collection('items').doc();
       batch.set(itemRef, item);
     });
 
@@ -2561,91 +2560,6 @@ const getDiamondCountByProductId = (productId: string): number => {
 
   return productIdToDiamondCount[productId] || 0;
 };
-
-// -------------------------------------------------------- [ Version ] ----------------------------------------------------------
-
-// Add version
-app.post('/handler-add-version', async (req, res) => {
-  try {
-    const { version, googlePlay, appleAppStore} = req.body;
-
-    // Add the new version to the Firestore collection and get the document reference
-    const versionRef = await db.collection(versionCollection).add({
-      version: version,
-      googlePlay: googlePlay,
-      appleAppStore: appleAppStore
-    });
-
-    // Return the version ID in the response
-    return res.status(201).json({ status: 'success', message: 'Version added successfully', versionId: versionRef.id });
-  } catch (error) {
-    console.error('Error adding version:', error);
-    return res.status(500).json({ status: 'error', message: 'Internal server error' });
-  }
-});
-
-// Get version by ID
-app.get('/get-version/:versionId', async (req, res) => {
-  try {
-    const versionId = req.params.versionId;
-
-    // Check if versionId is not defined
-    if (!versionId) {
-      return res.status(400).json({ status: 'error', message: 'Version ID is not defined' });
-    }
-
-    // Get the version document from Firestore using the provided versionId
-    const versionDoc = await db.collection(versionCollection).doc(versionId).get();
-
-    // Check if the version document exists
-    if (!versionDoc.exists) {
-      return res.status(404).json({ status: 'error', message: 'Version not found' });
-    }
-
-    // Retrieve the version data from the document
-    const versionData = versionDoc.data();
-
-    // Check if versionData is undefined
-    if (!versionData) {
-      return res.status(500).json({ status: 'error', message: 'Invalid data for the version document' });
-    }
-
-    // Return the version data in the response
-    return res.status(200).json({ status: 'success', data: versionData });
-  } catch (error) {
-    console.error('Error fetching version:', error);
-    return res.status(500).json({ status: 'error', message: 'Internal server error' });
-  }
-});
-
-// Update version by ID
-app.put('/update-version/:versionId', async (req, res) => {
-  try {
-    const versionId = req.params.versionId;
-    const { version } = req.body;
-
-    // Check if versionId is not defined
-    if (!versionId) {
-      return res.status(400).json({ status: 'error', message: 'Version ID is not defined' });
-    }
-
-    // Check if version is not defined in the request body
-    if (!version) {
-      return res.status(400).json({ status: 'error', message: 'Version is not defined in the request body' });
-    }
-
-    // Update the version document in Firestore using the provided versionId
-    await db.collection(versionCollection).doc(versionId).update({
-      version: version
-    });
-
-    // Return a success message in the response
-    return res.status(200).json({ status: 'success', message: 'Version updated successfully' });
-  } catch (error) {
-    console.error('Error updating version:', error);
-    return res.status(500).json({ status: 'error', message: 'Internal server error' });
-  }
-});
 
 // -------------------------------------------------------- [ Redeem Code ] ----------------------------------------------------------
 
