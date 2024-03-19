@@ -1586,7 +1586,7 @@ app.post('/user/buy-item', async (req, res) => {
 
     // Check if the user already has the item in their inventory
     const isDuplicateItem = (itemType: string) =>
-      userData?.inventory?.[itemType]?.some((item: { itemId: string }) => item.itemId === itemId);
+      userData?.inventory?.[itemType]?.some((item: string) => item === itemId);
 
     if ((itemData?.type === 'pilot' && isDuplicateItem('pilot')) || (itemData?.type === 'spaceship' && isDuplicateItem('spaceship'))) {
       return res.status(400).json({ status: 'error', message: 'User already has this item' });
@@ -1610,22 +1610,17 @@ app.post('/user/buy-item', async (req, res) => {
       currency: currency,
     });
 
-    // Add the item to the user's inventory based on the item type
-    const updateInventory = async (itemType: string, itemDetails: { itemId: string }) => {
+    // Add the item to the user's inventory
+    const updateInventory = async (itemType: string, itemId: string) => {
       // Modify this logic based on your actual data structure
       const updatedInventory = userData?.inventory?.[itemType] || [];
 
       // Check if the item with itemId already exists in the inventory
-      const isDuplicateItem = updatedInventory.includes(itemDetails.itemId);
+      const isDuplicateItem = updatedInventory.includes(itemId);
 
       if (!isDuplicateItem) {
-        // If it's an array, push the new itemId
-        if (Array.isArray(updatedInventory)) {
-          updatedInventory.push(itemDetails.itemId);
-        } else {
-          // If it's an array of objects, just push the new itemDetails
-          updatedInventory.push(itemDetails);
-        }
+        // Push the new itemId
+        updatedInventory.push(itemId);
 
         // Update the user's inventory in the database
         await db.collection(userCollection).doc(userId).update({
@@ -1638,28 +1633,13 @@ app.post('/user/buy-item', async (req, res) => {
       }
     };
 
-    if (itemData?.type === 'pilot') {
-      // Add pilot item to the user's pilot inventory
-      const addedSuccessfully = await updateInventory('pilot', {
-        itemId: itemData.itemId,
-        // Add other relevant item details
-      });
+    // Add item to user's inventory based on its type
+    const addedSuccessfully = await updateInventory(itemData.type, itemId);
 
-      if (!addedSuccessfully) {
-        return res.status(400).json({ status: 'error', message: 'User already has this item' });
-      }
-    } else if (itemData?.type === 'spaceship') {
-      // Add spaceship item to the user's spaceship inventory
-      const addedSuccessfully = await updateInventory('spaceship', {
-        itemId: itemData.itemId,
-        // Add other relevant item details
-      });
-
-      if (!addedSuccessfully) {
-        return res.status(400).json({ status: 'error', message: 'User already has this item' });
-      }
+    if (!addedSuccessfully) {
+      return res.status(400).json({ status: 'error', message: 'User already has this item' });
     }
-    
+
     return res.status(200).json({ status: 'success', message: 'Item purchased successfully', data: { currency , items: itemId} });
   } catch (error) {
     console.error('Error buying item:', error);
