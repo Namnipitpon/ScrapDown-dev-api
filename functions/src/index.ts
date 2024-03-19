@@ -2549,12 +2549,12 @@ const verifyAppleAppStorePurchase = (productId: unknown, transactionId: unknown,
 const getDiamondCountByProductId = (productId: string): number => {
   // Map productId to the corresponding diamond count
   const productIdToDiamondCount: Record<string, number> = {
-    'com.ichigames.scrapdown.diamond20': 20,
-    'com.ichigames.scrapdown.diamond80': 80,
-    'com.ichigames.scrapdown.diamond200': 200,
-    'com.ichigames.scrapdown.diamond600': 600,
-    'com.ichigames.scrapdown.diamond1600': 1600,
-    'com.ichigames.scrapdown.diamond4000': 4000,
+    'com.ichigames.scrapdown.diamond20': 200,
+    'com.ichigames.scrapdown.diamond80': 800,
+    'com.ichigames.scrapdown.diamond200': 2000,
+    'com.ichigames.scrapdown.diamond600': 6000,
+    'com.ichigames.scrapdown.diamond1600': 16000,
+    'com.ichigames.scrapdown.diamond4000': 40000,
     // Add more mappings as needed
   };
 
