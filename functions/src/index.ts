@@ -296,6 +296,14 @@ app.post('/user/login', async (req, res) => {
     const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
     const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
 
+    if (userData.dailyLogin) {
+      const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
+      const currentDate = new Date(currentDateTime);
+      const currentHour = currentDate.getHours();
+      const timeUntilNextLogin = calculateTimeUntilNextLogin(new Date(userData.dailyLogin.lastLogin), currentHour);
+      userData.dailyLogin.timeUntilNextLogin = timeUntilNextLogin
+    }
+
     // Check if request, block, and friend arrays are all empty
     if (userData.playerList.request.length === 0 && userData.playerList.block.length === 0 && userData.playerList.friend.length === 0) {
       return res.status(200).json({ status: 'success', message: 'Login successful', data: { userId: userDoc.id, ...userData, platform: credentialsData.platform , loginTime: loginTime} });
@@ -394,6 +402,14 @@ app.post('/user/login-platform-account', async (req, res) => {
       if (!platformData) {
         console.log('credentialsDoc data is undefined');
         return res.status(500).json('Internal server error');
+      }
+
+      if (userData.dailyLogin) {
+        const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
+        const currentDate = new Date(currentDateTime);
+        const currentHour = currentDate.getHours();
+        const timeUntilNextLogin = calculateTimeUntilNextLogin(new Date(userData.dailyLogin.lastLogin), currentHour);
+        userData.dailyLogin.timeUntilNextLogin = timeUntilNextLogin
       }
 
       // Check if request, block, and friend arrays are all empty
@@ -668,16 +684,33 @@ app.get('/user/find-by-id/:userId', async (req, res) => {
       return res.status(500).json('Internal server error');
     }
 
-    // if (!credentialsData) {
-    //   console.log('User data is undefined');
-    //   return res.status(500).json('Internal server error');
-    // }
+    const currentTime = new Date();
+    currentTime.setHours(currentTime.getHours() + 7);
+
+    // Format the login time
+    const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
+    const date = currentTime.getDate().toString().padStart(2, '0');
+    const year = currentTime.getFullYear();
+    const hours = currentTime.getHours().toString().padStart(2, '0');
+    const minutes = currentTime.getMinutes().toString().padStart(2, '0');
+    const seconds = currentTime.getSeconds().toString().padStart(2, '0');
+    const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
+    const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+
+    if (userData.dailyLogin) {
+      const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
+      const currentDate = new Date(currentDateTime);
+      const currentHour = currentDate.getHours();
+      const timeUntilNextLogin = calculateTimeUntilNextLogin(new Date(userData.dailyLogin.lastLogin), currentHour);
+      userData.dailyLogin.timeUntilNextLogin = timeUntilNextLogin
+    }
 
     const result = {
       data: {
         userId: userDoc.id,
         ...userData,
-        platform: credentialsData?.platform || {}
+        platform: credentialsData?.platform || {} ,
+        loginTime: loginTime
       },
     };
 
@@ -3226,6 +3259,30 @@ app.post('/add-monster-names', async (req, res) => {
     return res.status(201).json({ status: 'success', message: 'Monster names added successfully to the new collection' });
   } catch (error) {
     console.error('Error adding monster names:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+// Define the endpoint to get items by name
+app.get('/get-items-by-name/:name', async (req, res) => {
+  try {
+    const itemName = req.params.name;
+
+    // Query the database to find items with the specified name
+    const itemsSnapshot = await db.collection('items').where('name', '==', itemName).get();
+
+    // Initialize an array to store item IDs and data
+    const items: { id: string; data: admin.firestore.DocumentData; }[] = [];
+
+    // Iterate over the retrieved items and push their IDs and data to the array
+    itemsSnapshot.forEach((doc) => {
+      items.push({ id: doc.id, data: doc.data() });
+    });
+
+    // Return the matching items in the response
+    return res.status(200).json({ status: 'success', data: items });
+  } catch (error) {
+    console.error('Error fetching items by name:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
