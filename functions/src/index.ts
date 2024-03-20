@@ -1717,6 +1717,62 @@ app.post('/user/daily-login', async (req, res) => {
   }
 });
 
+// API endpoint to create the dailyLogin collection and initialize data
+app.post('/create-daily-login', async (req, res) => {
+  try {
+    // Check if the dailyLogin collection already exists
+    const collections = await db.listCollections();
+    const dailyLoginCollection = collections.find(col => col.id === 'dailyLogin');
+
+    if (dailyLoginCollection) {
+      return res.status(400).json({ status: 'error', message: 'Collection already exists' });
+    }
+
+    // Create the dailyLogin collection
+    await db.collection('dailyLogin').doc().set({
+      maxDay: 7,
+      items: [
+        { day: 1, rewards: { type: 'coin', reward: '50' } },
+        { day: 2, rewards: { type: 'coin', reward: '100' } },
+        { day: 3, rewards: { type: 'diamond', reward: '10' } },
+        { day: 4, rewards: { type: 'pilot', reward: 'CHA018' } },
+        { day: 5, rewards: { type: 'coin', reward: '100' } },
+        { day: 6, rewards: { type: 'diamond', reward: '50' } },
+        { day: 7, rewards: { type: 'spaceship', reward: 'SHIP016' } },
+        // Add more days as needed
+      ]
+    });
+
+    return res.status(200).json({ status: 'success', message: 'DailyLogin collection created successfully' });
+  } catch (error) {
+    console.error('Error creating dailyLogin collection:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+// API endpoint to get daily rewards by ID
+app.get('/api/daily/:id', async (req, res) => {
+  try {
+    const dailyId = req.params.id;
+
+    // Retrieve daily rewards data from Firestore based on daily ID
+    const dailyRewardsDoc = await admin.firestore().collection('dailyLogin').doc(dailyId).get();
+
+    // Check if the document exists
+    if (!dailyRewardsDoc.exists) {
+      return res.status(404).json({ status: 'error', message: 'Daily rewards not found' });
+    }
+
+    // Extract daily rewards data
+    const dailyRewardsData = dailyRewardsDoc.data();
+
+    return res.status(200).json({ status: 'success', data: dailyRewardsData });
+  } catch (error) {
+    console.error('Error retrieving daily rewards:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
 //  Add achievement
 app.put('/user/add-achievement', async (req, res) => {
   try {
@@ -1815,15 +1871,46 @@ const DailyLogin = async (userId: string) => {
   }
 
   const userData = userDoc.data();
-  const currentDate = new Date();
+  const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
+  const currentDate = new Date(currentDateTime);
   const currentDay = currentDate.toISOString().split('T')[0];
   const currentHour = currentDate.getHours();
 
-  // Maximum consecutive login days allowed
-  const maxConsecutiveDays = 15;
+  // Fetch the dailyLogin document for the user
+  const dailyLoginDoc = await db.collection('dailyLogin').doc('gKiVI0QxznK1ghC1I3rx').get();
+
+  if (!dailyLoginDoc.exists) {
+    throw new Error('Daily login data not found');
+  }
+
+  const dailyLoginData = dailyLoginDoc.data();
+  const maxDay = dailyLoginData?.maxDay || '';
+
+  // Initialize dailyLogin if not present
+  if (!userData?.dailyLogin) {
+    const timeUntilNextLogin = calculateTimeUntilNextLogin(currentDate, currentHour);
+    const rewards = dailyLoginData?.items[0].rewards || [];
+
+    const updateData =  await updateRewards(userId, rewards);
+    // Update user's inventory and currency with rewards
+    await userRef.update({
+      'dailyLogin.lastLogin': currentDay,
+      'dailyLogin.days': 1
+    });
+    return {
+      message: 'Daily login successful',
+      data: { timeUntilNextLogin: timeUntilNextLogin, days: 1, currency: updateData.currency , inventory: updateData.inventory }
+    };
+  }
+
+  if (userData?.dailyLogin.days >= maxDay) {
+    return {
+      message : 'Daily Login Limit Reached'
+    }
+  }
 
   // Check if the user has already logged in today
-  if (userData?.dailyLogin && userData.dailyLogin.lastLogin === currentDay) {
+  if (userData?.dailyLogin.lastLogin === currentDay) {
     const timeUntilNextLogin = calculateTimeUntilNextLogin(userData.dailyLogin.lastLogin, currentHour);
     return {
       message: 'User has already logged in today',
@@ -1831,26 +1918,9 @@ const DailyLogin = async (userId: string) => {
     };
   }
 
-  // Initialize dailyLogin if not present
-  if (!userData?.dailyLogin) {
-    await userRef.update({
-      'dailyLogin.lastLogin': currentDay,
-      'dailyLogin.days': 1
-    });
-    return {
-      message: 'Daily login successful',
-      data: { timeUntilNextLogin: '00:00:00', days: 1 }
-    };
-  }
-
-  console.log('TESTTSTETASDADASD');
-  
-
   // Check if 24 hours have passed since the last login or it's the first login
-  if (userData.dailyLogin && isNextLogin(currentDate, new Date(userData.dailyLogin.lastLogin), currentHour)) {
-    // Update the daily login information
-    const consecutiveDays = userData?.dailyLogin.lastLogin === previousDay(currentDate) ?
-      Math.min((userData.dailyLogin.days || 0) + 1, maxConsecutiveDays) : 1;
+  if (isNextDay(currentDate, new Date(userData.dailyLogin.lastLogin), currentHour) || isLastLoginBeforeCurrentDate(new Date(userData.dailyLogin.lastLogin), currentDate)) {
+    const consecutiveDays = userData.dailyLogin.days + 1 
 
     await userRef.update({
       'dailyLogin.lastLogin': currentDay,
@@ -1860,9 +1930,13 @@ const DailyLogin = async (userId: string) => {
 
     // Calculate the time until the next login
     const timeUntilNextLogin = calculateTimeUntilNextLogin(currentDate, currentHour);
+    const rewards = dailyLoginData?.items[consecutiveDays - 1].rewards || [];
+    // Update user's inventory and currency with rewards
+    const updateData =  await updateRewards(userId, rewards);
+    
     return {
       message: 'Daily login successful',
-      data: { timeUntilNextLogin, days: consecutiveDays },
+      data: { timeUntilNextLogin, days: consecutiveDays, currency: updateData.currency , inventory: updateData.inventory },
     };
   } else {
     const timeUntilNextLogin = calculateTimeUntilNextLogin(new Date(userData.dailyLogin.lastLogin), currentHour);
@@ -1871,35 +1945,39 @@ const DailyLogin = async (userId: string) => {
 };
 
 // Helper function to calculate if next login is due
-const isNextLogin = (currentDate: Date, lastLoginDate: Date, currentHour: number) => {
+const isNextDay = (currentDate: Date, lastLoginDate: Date, currentHour: number) => {
   // Check if it's a new day and the current hour is past 7 AM
   return currentDate.getDate() !== lastLoginDate.getDate() && currentHour >= 7;
 };
 
-// Helper function to get the previous day's date
-const previousDay = (date: Date) => {
-  const prevDate = new Date(date);
-  prevDate.setDate(prevDate.getDate() - 1);
-  return prevDate.toISOString().split('T')[0];
+const isLastLoginBeforeCurrentDate = (lastLoginDate: Date, currentDate: Date): boolean => {
+  // Convert both dates to timestamps
+  const lastLoginTimestamp: number = lastLoginDate.getTime();
+  const currentTimestamp: number = currentDate.getTime();
+  
+  // Check if the last login date is before the current date
+  return lastLoginTimestamp < currentTimestamp;
 };
 
 // Helper function to calculate the time until the next login
 const calculateTimeUntilNextLogin = (lastLogin: Date, currentHour: number) => {
   const nextLoginHour = 7; // Next login hour (7 AM)
-
   let timeDifference: number;
+
+  const currentDateTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' });
+  const currentDateTimeObject = new Date(currentDateTime);
 
   if (currentHour < nextLoginHour) {
     // If the current hour is before the next login hour, calculate time until next login for today
-    const todayNextLogin = new Date(lastLogin);
+    const todayNextLogin = new Date(currentDateTimeObject);
     todayNextLogin.setHours(nextLoginHour, 0, 0, 0);
-    timeDifference = todayNextLogin.getTime() - Date.now();
+    timeDifference = todayNextLogin.getTime() - currentDateTimeObject.getTime();
   } else {
     // If the current hour has passed the next login hour, calculate time until next login for tomorrow
     const tomorrowNextLogin = new Date(lastLogin);
     tomorrowNextLogin.setDate(tomorrowNextLogin.getDate() + 1);
     tomorrowNextLogin.setHours(nextLoginHour, 0, 0, 0);
-    timeDifference = tomorrowNextLogin.getTime() - Date.now();
+    timeDifference = tomorrowNextLogin.getTime() - currentDateTimeObject.getTime();
   }
 
   // If the time difference is negative, set it to 0
@@ -1918,6 +1996,65 @@ const calculateTimeUntilNextLogin = (lastLogin: Date, currentHour: number) => {
 // Helper function to format time units (hours, minutes, seconds) as two digits
 const formatTimeUnit = (unit: number) => {
   return unit < 10 ? `0${unit}` : unit.toString();
+};
+
+const updateRewards = async (userId: string, reward: { type: string; reward: string }) => {
+  const { type, reward: rewardValue } = reward;
+  const userRef = db.collection(userCollection).doc(userId);
+
+  try {
+    // Fetch the user data
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      throw new Error('User not found');
+    }
+
+    // Get the current user data
+    const userData = userDoc.data();
+    if (!userData) {
+      throw new Error('User data is undefined');
+    }
+
+    switch (type) {
+    case 'coin':
+      // Update coin balance
+      userData.currency.coin += parseInt(rewardValue, 10);
+      break;
+    case 'diamond':
+      // Update diamond balance
+      userData.currency.diamond += parseInt(rewardValue, 10);
+      break;
+    case 'spaceship':
+      // Add spaceship to inventory
+      if (!userData.inventory.spaceship) {
+        userData.inventory.spaceship = [];
+      }
+      userData.inventory.spaceship.push(rewardValue);
+      break;
+    case 'pilot':
+      // Add pilot to inventory
+      if (!userData.inventory.pilot) {
+        userData.inventory.pilot = [];
+      }
+      userData.inventory.pilot.push(rewardValue);
+      break;
+    default:
+      // Invalid reward type
+      console.error('Invalid reward type:', type);
+      break;
+    }
+
+    // Update the user data in Firestore
+    await userRef.update(userData);
+
+    console.log('User data updated successfully');
+
+    // Return the updated inventory and currency
+    return { inventory: userData.inventory, currency: userData.currency };
+  } catch (error) {
+    console.error('Error updating user data:', error);
+    throw new Error('Failed to update user data');
+  }
 };
 
 // Define a function for creating a new user with credentials
