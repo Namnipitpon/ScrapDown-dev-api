@@ -1890,7 +1890,7 @@ app.delete('/user/:userId', async (req, res) => {
     const userId = req.params['userId'];
 
     if (!userId) {
-      return res.status(400).json('userId is not defined');
+      return res.status(400).json({ status: 'error', message: 'userId is not defined' });
     }
 
     // Delete user from userCollection
@@ -1898,7 +1898,7 @@ app.delete('/user/:userId', async (req, res) => {
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      return res.status(404).json('User not found');
+      return res.status(404).json({ status: 'error', message: 'User not found' });
     }
 
     // Delete corresponding user from credentialsCollection
@@ -1915,17 +1915,17 @@ app.delete('/user/:userId', async (req, res) => {
     const credentialsData = credentialsDoc.data();
 
     if (!credentialsData) {
-      return res.status(200).json('User deleted successfully');
+      return res.status(200).json({ status: 'success', message: 'User deleted successfully' });
     }
 
     if (credentialsData.platformId && credentialsData.platformId.google) {
       await deleteUserFromAuthentication(credentialsData.platformId.google);
     }
   
-    return res.status(200).json('User deleted successfully');
+    return res.status(200).json({ status: 'success', message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);
-    return res.status(500).json('Internal server error');
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
 
