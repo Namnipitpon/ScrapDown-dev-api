@@ -5,6 +5,7 @@ import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as bcrypt from 'bcrypt';
 import * as nodemailer from 'nodemailer';
+import * as cors from 'cors';
 
 //  initialize firebase inorder to access its services
 admin.initializeApp(functions.config().firebase);
@@ -12,6 +13,9 @@ admin.initializeApp(functions.config().firebase);
 //  initialize express server
 const app = express();
 const main = express();
+
+// Apply CORS middleware
+app.use(cors({ origin: true }));
 
 //  add the path to receive request and set json as bodyParser to process the body
 main.use('/api/v1', app);
@@ -1598,6 +1602,10 @@ app.post('/user/buy-item', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Incomplete request data' });
     }
 
+    if (paymentMethod !== 'coin' && paymentMethod !== 'diamond') {
+      return res.status(400).json({ status: 'error', message: 'Payment method not supported' }); 
+    }
+
     // Retrieve user data from the database
     const userDoc = await db.collection(userCollection).doc(userId).get();
 
@@ -1749,6 +1757,42 @@ app.post('/user/daily-login', async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
+
+// Get time of daily login
+app.get('/user/daily-login/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ status: 'error', message: 'userId is not defined' });
+    }
+
+    const userDoc = await db.collection(userCollection).doc(userId).get();
+    const userData = userDoc.data();
+
+    if (!userData) {
+      console.log('User data is undefined');
+      return res.status(500).json('Internal server error');
+    }
+
+    let timeUntilNextLogin = ''; // Declare timeUntilNextLogin variable
+
+    if (userData.dailyLogin) {
+      const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
+      const currentDate = new Date(currentDateTime);
+      const currentHour = currentDate.getHours();
+      timeUntilNextLogin = calculateTimeUntilNextLogin(new Date(userData.dailyLogin.lastLogin), currentHour);
+    } else {
+      timeUntilNextLogin = '00:00:00'
+      return res.status(200).json({ status: 'success', message: 'Time until next login retrieved successfully', data: { timeUntilNextLogin: timeUntilNextLogin } });
+    }
+
+    return res.status(200).json({ status: 'success', message: 'Time until next login retrieved successfully', data: { timeUntilNextLogin: timeUntilNextLogin } });
+  } catch (error) {
+    console.error('Error handling daily login:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+}); 
 
 // API endpoint to create the dailyLogin collection and initialize data
 app.post('/create-daily-login', async (req, res) => {
@@ -2573,6 +2617,38 @@ app.get('/monsters', async (req, res) => {
     return res.status(200).json({ status: 'success', message: 'Items retrieved successfully', data: items });
   } catch (error) {
     console.error('Error fetching items:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+// Define the route to update an item by item ID
+app.put('/items/:itemId', async (req, res) => {
+  try {
+    const itemId = req.params.itemId;
+
+    // Validate the item ID (you can add your own validation logic here)
+    if (!itemId) {
+      return res.status(400).json({ status: 'error', message: 'Item ID is required' });
+    }
+
+    // Extract the updated item data from the request body
+    const updatedItemData = req.body;
+
+    // Update the item in your database (replace 'items' with your collection name)
+    const itemRef = db.collection('items').where('itemId', '==', itemId);
+    const snapshot = await itemRef.get();
+
+    if (snapshot.empty) {
+      return res.status(404).json({ status: 'error', message: 'Item not found' });
+    }
+
+    const itemDoc = snapshot.docs[0]; // Get the first document in the snapshot
+    await itemDoc.ref.update(updatedItemData);
+
+    // Return a success response
+    return res.status(200).json({ status: 'success', message: 'Item updated successfully' });
+  } catch (error) {
+    console.error('Error updating item:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
