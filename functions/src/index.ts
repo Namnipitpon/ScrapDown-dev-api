@@ -355,8 +355,12 @@ app.post('/user/login-platform-account', async (req, res) => {
   try {
     const { email, platform, platformId } = req.body;
 
-    if (!email || !platformId || !platform) {
-      return res.status(400).json({ status: 'error', message: 'Email, platformId or platform is not defined' });
+    if (!platformId || !platform) {
+      return res.status(400).json({ status: 'error', message: 'PlatformId or platform is not defined' });
+    }
+    
+    if (platform.toLowerCase() !== 'apple' && !email) {
+      return res.status(400).json({ status: 'error', message: 'Email is not defined' });
     }
 
     const currentTime = new Date();
@@ -2138,8 +2142,12 @@ const updateRewards = async (userId: string, reward: { type: string; reward: str
 const createUserWithPlatform = async (userId: string, email: string, platform: string, platformId: string) => {
   try {
     // Validation
-    if (!email || !platform || !platformId) {
-      throw new Error('Email, platform, or platformId is not defined');
+    if (!platformId || !platform) {
+      throw new Error('Platform or platformId is not defined');
+    }
+    
+    if (platform.toLowerCase() !== 'apple' && !email) {
+      throw new Error('Email is required for non-Apple platforms');
     }
 
     // Convert the email to lowercase for case-insensitive comparison and storage
