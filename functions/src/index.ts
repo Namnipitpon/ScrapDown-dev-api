@@ -1868,6 +1868,10 @@ app.delete('/user/:userId', async (req, res) => {
     if (credentialsData.platformId && credentialsData.platformId.google) {
       await deleteUserFromAuthentication(credentialsData.platformId.google);
     }
+
+    if (credentialsData.platformId && credentialsData.platformId.apple) {
+      await deleteUserFromAuthentication(credentialsData.platformId.apple);
+    }
   
     return res.status(200).json({ status: 'success', message: 'User deleted successfully' });
   } catch (error) {
