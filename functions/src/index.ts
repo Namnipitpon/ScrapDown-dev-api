@@ -205,9 +205,6 @@ app.post('/user/guest-register', async (req, res) => {
 // Guest Login
 app.post('/user/guest-login', async (req, res) => {
   try {
-    const currentTime = new Date();
-    currentTime.setHours(currentTime.getHours() + 7);
-
     // Set data for the guest user
     const result = await setUserDetails('', '');
 
@@ -218,16 +215,7 @@ app.post('/user/guest-login', async (req, res) => {
       if (guestUserId) {
         const guestUserDoc = await db.collection(userCollection).doc(guestUserId).get();
         const guestUserData = guestUserDoc.data();
-
-        // Format the login time
-        const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
-        const date = currentTime.getDate().toString().padStart(2, '0');
-        const year = currentTime.getFullYear();
-        const hours = currentTime.getHours().toString().padStart(2, '0');
-        const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-        const seconds = currentTime.getSeconds().toString().padStart(2, '0');
-        const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
-        const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+        const loginTime = formatLoginTime()
 
         return res.status(200).json({ status: 'success', message: 'Guest login successful', data: { userId: guestUserId, ...guestUserData, loginTime: loginTime} });
       } else {
@@ -248,8 +236,6 @@ app.post('/user/guest-login', async (req, res) => {
 app.post('/user/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const currentTime = new Date();
-    currentTime.setHours(currentTime.getHours() + 7);
 
     if (!email || !password) {
       return res.status(400).json({ status: 'error', message: 'Email or password is not defined' });
@@ -290,15 +276,7 @@ app.post('/user/login', async (req, res) => {
       return res.status(500).json('Internal server error');
     }
 
-    // Format the login time
-    const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
-    const date = currentTime.getDate().toString().padStart(2, '0');
-    const year = currentTime.getFullYear();
-    const hours = currentTime.getHours().toString().padStart(2, '0');
-    const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-    const seconds = currentTime.getSeconds().toString().padStart(2, '0');
-    const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
-    const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+    const loginTime = formatLoginTime()
 
     if (userData.dailyLogin) {
       const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
@@ -358,19 +336,7 @@ app.post('/user/login-platform-account', async (req, res) => {
     if (!email || !platformId || !platform) {
       return res.status(400).json({ status: 'error', message: 'Email, platformId or platform is not defined' });
     }
-
-    const currentTime = new Date();
-    currentTime.setHours(currentTime.getHours() + 7);
-  
-    // Format the login time
-    const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
-    const date = currentTime.getDate().toString().padStart(2, '0');
-    const year = currentTime.getFullYear();
-    const hours = currentTime.getHours().toString().padStart(2, '0');
-    const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-    const seconds = currentTime.getSeconds().toString().padStart(2, '0');
-    const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
-    const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+    const loginTime = formatLoginTime()
 
     // Query the credentials collection where platform matches the provided email
     const credentialsRef = db.collection(credentialsCollection);
@@ -675,10 +641,6 @@ app.get('/user/find-by-id/:userId', async (req, res) => {
     }
 
     const credentialsDoc = await db.collection(credentialsCollection).doc(userId).get();
-
-    // if (!credentialsDoc.exists) {
-    //   return res.status(404).json({ status: 'error', message: 'User not found' });
-    // }
     
     const userData = userDoc.data();
     const credentialsData = credentialsDoc.data();
@@ -688,18 +650,7 @@ app.get('/user/find-by-id/:userId', async (req, res) => {
       return res.status(500).json('Internal server error');
     }
 
-    const currentTime = new Date();
-    currentTime.setHours(currentTime.getHours() + 7);
-
-    // Format the login time
-    const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
-    const date = currentTime.getDate().toString().padStart(2, '0');
-    const year = currentTime.getFullYear();
-    const hours = currentTime.getHours().toString().padStart(2, '0');
-    const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-    const seconds = currentTime.getSeconds().toString().padStart(2, '0');
-    const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
-    const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+    const loginTime = formatLoginTime()
 
     if (userData.dailyLogin) {
       const currentDateTime = new Date().toLocaleString('en-US', {timeZone: 'Asia/Bangkok'}); // Adjusted for Thai timezone
@@ -2456,6 +2407,20 @@ const generateRandomString = (length: number): string => {
   
   const randomString = randomArray.join('');
   return randomString;
+};
+
+const formatLoginTime = () => {
+  const currentTime = new Date();
+  currentTime.setHours(currentTime.getHours() + 7);
+  const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
+  const date = currentTime.getDate().toString().padStart(2, '0');
+  const year = currentTime.getFullYear();
+  const hours = currentTime.getHours().toString().padStart(2, '0');
+  const minutes = currentTime.getMinutes().toString().padStart(2, '0');
+  const seconds = currentTime.getSeconds().toString().padStart(2, '0');
+  const milliseconds = currentTime.getMilliseconds().toString().padStart(3, '0');
+  const loginTime = `${month}/${date}/${year} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+  return loginTime;
 };
 
 // -------------------------------------------------------- [ Match Calulator ] ----------------------------------------------------------
