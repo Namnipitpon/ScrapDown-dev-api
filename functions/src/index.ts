@@ -773,6 +773,46 @@ app.put('/user/update-spaceship-active', async (req, res) => {
   }
 });
 
+// Update Chroma Active
+app.post('/user/update-chroma-active', async (req, res) => {
+  try {
+    const { userId, chromActives } = req.body;
+
+    if (!userId || !chromActives || !Array.isArray(chromActives)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid request body' });
+    }
+
+    const userRef = db.collection(userCollection).doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    const existingChromActives = userDoc.data()?.chromActives || [];
+
+    // Update or insert new chromActives
+    const updatedChromActives = existingChromActives.map((existingChroma: any) => {
+      const newChroma = chromActives.find((chroma: any) => chroma.spaceship === existingChroma.spaceship);
+      return newChroma || existingChroma;
+    });
+
+    // Add new chromActives that don't exist
+    chromActives.forEach((newChroma: any) => {
+      if (!existingChromActives.find((chroma: any) => chroma.spaceship === newChroma.spaceship)) {
+        updatedChromActives.push(newChroma);
+      }
+    });
+
+    await userRef.update({ chromActives: updatedChromActives });
+
+    return res.status(200).json({ status: 'success', message: 'Chroma active updated successfully', data: { chromActives: updatedChromActives } });
+  } catch (error) {
+    console.error('Error updating chroma active:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
 // Generating a match code
 app.post('/match/generate-code', async (req, res) => {
   try {
@@ -1866,11 +1906,21 @@ app.delete('/user/:userId', async (req, res) => {
     }
 
     if (credentialsData.platformId && credentialsData.platformId.google) {
-      await deleteUserFromAuthentication(credentialsData.platformId.google);
+      try {
+        await deleteUserFromAuthentication(credentialsData.platformId.google);
+      } catch (error) {
+        console.error('Error deleting user from Google Authentication:', error);
+        return res.status(500).json({ status: 'error', message: 'Failed to delete user from Google Authentication' });
+      }
     }
-
+    
     if (credentialsData.platformId && credentialsData.platformId.apple) {
-      await deleteUserFromAuthentication(credentialsData.platformId.apple);
+      try {
+        await deleteUserFromAuthentication(credentialsData.platformId.apple);
+      } catch (error) {
+        console.error('Error deleting user from Apple Authentication:', error);
+        return res.status(500).json({ status: 'error', message: 'Failed to delete user from Apple Authentication' });
+      }
     }
   
     return res.status(200).json({ status: 'success', message: 'User deleted successfully' });
@@ -2757,6 +2807,28 @@ const getDiamondCountByProductId = (productId: string): number => {
 };
 
 // -------------------------------------------------------- [ Redeem Code ] ----------------------------------------------------------
+
+// Count the occurrences of a specific code in the redeemedCodes array
+app.get('/api/count-redeemed-codes/:name', async (req, res) => {
+  try {
+    const codeName = req.params.name;
+
+    // Get a reference to the userRedeemedCodes collection
+    const redeemedCodesRef = admin.firestore().collection('userRedeemedCodes');
+
+    // Query the collection to count occurrences of the specified code
+    const querySnapshot = await redeemedCodesRef.where('redeemedCodes', 'array-contains', codeName).get();
+
+    // Count the number of documents in the query result
+    const count = querySnapshot.size;
+
+    // Return the count as a JSON response
+    return res.status(200).json({ count });
+  } catch (error) {
+    console.error('Error counting redeemed codes:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // adding redeem codes
 app.post('/add-redeem-code', async (req, res) => {
